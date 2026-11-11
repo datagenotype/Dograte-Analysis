@@ -1,0 +1,480 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyPyAwmSTZa7uYbUdOzG2rRk",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/datagenotype/Dograte-Analysis/blob/main/Kreedland%20Engagement%20Clustering\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "**Importing Functions**"
+      ],
+      "metadata": {
+        "id": "AUksKdGy8PLq"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "Bj5DwsCx77C2"
+      },
+      "outputs": [],
+      "source": [
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "from sklearn.preprocessing import StandardScaler\n",
+        "from sklearn.cluster import KMeans\n",
+        "from sklearn.metrics import silhouette_score\n",
+        "\n",
+        "FILE = \"Kreedland_Engagement_Sample_Data.xlsx\"   # change this to your real export\n",
+        "RANDOM_STATE = 0                                 # keeps results the same each time you run\n",
+        "pd.set_option(\"display.float_format\", lambda x: f\"{x:,.1f}\")\n",
+        "plt.rcParams[\"figure.figsize\"] = (9, 5)\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "**Data Gathering**"
+      ],
+      "metadata": {
+        "id": "wszKm8bw_Rva"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "report_date = pd.to_datetime(pd.read_excel(FILE, sheet_name=\"Instructions\", header=None).iloc[3, 1])\n",
+        "df = pd.read_excel(FILE, sheet_name=\"Villager_Data\")\n",
+        "\n",
+        "df[\"join_date\"] = pd.to_datetime(df[\"join_date\"])\n",
+        "df[\"last_activity_date\"] = pd.to_datetime(df[\"last_activity_date\"])\n",
+        "df[\"days_since_last_activity\"] = (report_date - df[\"last_activity_date\"]).dt.days\n",
+        "df[\"tenure_months\"] = ((report_date - df[\"join_date\"]).dt.days / 30.44).round()\n",
+        "\n",
+        "print(f\"Report date: {report_date:%d %b %Y}\")\n",
+        "print(f\"Villagers loaded: {len(df)}\")\n",
+        "df.head(10)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 398
+        },
+        "id": "nSJ7zDO18nVL",
+        "outputId": "8feebc86-616d-4bff-c5e3-4484db65dd46"
+      },
+      "execution_count": 6,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Report date: 31 Oct 2026\n",
+            "Villagers loaded: 60\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "  villager_id   department  join_date last_activity_date  quests_completed_6m  \\\n",
+              "0        V001         QHSE 2025-09-22         2026-10-07                    8   \n",
+              "1        V002  Engineering 2025-01-12         2026-10-21                   14   \n",
+              "2        V003         QHSE 2025-07-17         2026-10-28                   16   \n",
+              "3        V004   Commercial 2024-09-02         2026-09-15                    7   \n",
+              "4        V005   Commercial 2026-04-11         2026-09-03                    2   \n",
+              "5        V006         QHSE 2025-11-08         2026-10-20                   16   \n",
+              "6        V007           HR 2024-07-14         2026-10-12                    9   \n",
+              "7        V008         QHSE 2024-06-14         2026-08-11                    8   \n",
+              "8        V009           IT 2025-08-30         2026-09-02                    8   \n",
+              "9        V010   Operations 2025-07-19         2026-10-21                    0   \n",
+              "\n",
+              "   missions_joined_6m  tribes_joined  days_since_last_activity  tenure_months  \n",
+              "0                   8              0                        24           13.0  \n",
+              "1                  13              2                        10           22.0  \n",
+              "2                  10              3                         3           15.0  \n",
+              "3                   3              2                        46           26.0  \n",
+              "4                   4              1                        58            7.0  \n",
+              "5                   6              3                        11           12.0  \n",
+              "6                   5              2                        19           28.0  \n",
+              "7                   7              0                        81           29.0  \n",
+              "8                   4              1                        59           14.0  \n",
+              "9                   3              0                        10           15.0  "
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-c934875d-8b06-4d34-b163-59d1f148f82e\" class=\"colab-df-container\">\n",
+              "    <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>villager_id</th>\n",
+              "      <th>department</th>\n",
+              "      <th>join_date</th>\n",
+              "      <th>last_activity_date</th>\n",
+              "      <th>quests_completed_6m</th>\n",
+              "      <th>missions_joined_6m</th>\n",
+              "      <th>tribes_joined</th>\n",
+              "      <th>days_since_last_activity</th>\n",
+              "      <th>tenure_months</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>V001</td>\n",
+              "      <td>QHSE</td>\n",
+              "      <td>2025-09-22</td>\n",
+              "      <td>2026-10-07</td>\n",
+              "      <td>8</td>\n",
+              "      <td>8</td>\n",
+              "      <td>0</td>\n",
+              "      <td>24</td>\n",
+              "      <td>13.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>V002</td>\n",
+              "      <td>Engineering</td>\n",
+              "      <td>2025-01-12</td>\n",
+              "      <td>2026-10-21</td>\n",
+              "      <td>14</td>\n",
+              "      <td>13</td>\n",
+              "      <td>2</td>\n",
+              "      <td>10</td>\n",
+              "      <td>22.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>V003</td>\n",
+              "      <td>QHSE</td>\n",
+              "      <td>2025-07-17</td>\n",
+              "      <td>2026-10-28</td>\n",
+              "      <td>16</td>\n",
+              "      <td>10</td>\n",
+              "      <td>3</td>\n",
+              "      <td>3</td>\n",
+              "      <td>15.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>V004</td>\n",
+              "      <td>Commercial</td>\n",
+              "      <td>2024-09-02</td>\n",
+              "      <td>2026-09-15</td>\n",
+              "      <td>7</td>\n",
+              "      <td>3</td>\n",
+              "      <td>2</td>\n",
+              "      <td>46</td>\n",
+              "      <td>26.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>V005</td>\n",
+              "      <td>Commercial</td>\n",
+              "      <td>2026-04-11</td>\n",
+              "      <td>2026-09-03</td>\n",
+              "      <td>2</td>\n",
+              "      <td>4</td>\n",
+              "      <td>1</td>\n",
+              "      <td>58</td>\n",
+              "      <td>7.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>5</th>\n",
+              "      <td>V006</td>\n",
+              "      <td>QHSE</td>\n",
+              "      <td>2025-11-08</td>\n",
+              "      <td>2026-10-20</td>\n",
+              "      <td>16</td>\n",
+              "      <td>6</td>\n",
+              "      <td>3</td>\n",
+              "      <td>11</td>\n",
+              "      <td>12.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>6</th>\n",
+              "      <td>V007</td>\n",
+              "      <td>HR</td>\n",
+              "      <td>2024-07-14</td>\n",
+              "      <td>2026-10-12</td>\n",
+              "      <td>9</td>\n",
+              "      <td>5</td>\n",
+              "      <td>2</td>\n",
+              "      <td>19</td>\n",
+              "      <td>28.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>7</th>\n",
+              "      <td>V008</td>\n",
+              "      <td>QHSE</td>\n",
+              "      <td>2024-06-14</td>\n",
+              "      <td>2026-08-11</td>\n",
+              "      <td>8</td>\n",
+              "      <td>7</td>\n",
+              "      <td>0</td>\n",
+              "      <td>81</td>\n",
+              "      <td>29.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>8</th>\n",
+              "      <td>V009</td>\n",
+              "      <td>IT</td>\n",
+              "      <td>2025-08-30</td>\n",
+              "      <td>2026-09-02</td>\n",
+              "      <td>8</td>\n",
+              "      <td>4</td>\n",
+              "      <td>1</td>\n",
+              "      <td>59</td>\n",
+              "      <td>14.0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>9</th>\n",
+              "      <td>V010</td>\n",
+              "      <td>Operations</td>\n",
+              "      <td>2025-07-19</td>\n",
+              "      <td>2026-10-21</td>\n",
+              "      <td>0</td>\n",
+              "      <td>3</td>\n",
+              "      <td>0</td>\n",
+              "      <td>10</td>\n",
+              "      <td>15.0</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "    <div class=\"colab-df-buttons\">\n",
+              "\n",
+              "  <div class=\"colab-df-container\">\n",
+              "    <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-c934875d-8b06-4d34-b163-59d1f148f82e')\"\n",
+              "            title=\"Convert this dataframe to an interactive table.\"\n",
+              "            style=\"display:none;\">\n",
+              "\n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\" viewBox=\"0 -960 960 960\">\n",
+              "    <path d=\"M120-120v-720h720v720H120Zm60-500h600v-160H180v160Zm220 220h160v-160H400v160Zm0 220h160v-160H400v160ZM180-400h160v-160H180v160Zm440 0h160v-160H620v160ZM180-180h160v-160H180v160Zm440 0h160v-160H620v160Z\"/>\n",
+              "  </svg>\n",
+              "    </button>\n",
+              "\n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-buttons div {\n",
+              "      margin-bottom: 4px;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "    <script>\n",
+              "      const buttonEl =\n",
+              "        document.querySelector('#df-c934875d-8b06-4d34-b163-59d1f148f82e button.colab-df-convert');\n",
+              "      buttonEl.style.display =\n",
+              "        google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "      async function convertToInteractive(key) {\n",
+              "        const element = document.querySelector('#df-c934875d-8b06-4d34-b163-59d1f148f82e');\n",
+              "        const dataTable =\n",
+              "          await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                    [key], {});\n",
+              "        if (!dataTable) return;\n",
+              "\n",
+              "        const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "          '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "          + ' to learn more about interactive tables.';\n",
+              "        element.innerHTML = '';\n",
+              "        dataTable['output_type'] = 'display_data';\n",
+              "        await google.colab.output.renderOutput(dataTable, element);\n",
+              "        const docLink = document.createElement('div');\n",
+              "        docLink.innerHTML = docLinkHtml;\n",
+              "        element.appendChild(docLink);\n",
+              "      }\n",
+              "    </script>\n",
+              "  </div>\n",
+              "\n",
+              "\n",
+              "    </div>\n",
+              "  </div>\n"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "dataframe",
+              "variable_name": "df",
+              "summary": "{\n  \"name\": \"df\",\n  \"rows\": 60,\n  \"fields\": [\n    {\n      \"column\": \"villager_id\",\n      \"properties\": {\n        \"dtype\": \"string\",\n        \"num_unique_values\": 60,\n        \"samples\": [\n          \"V001\",\n          \"V006\",\n          \"V037\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"department\",\n      \"properties\": {\n        \"dtype\": \"category\",\n        \"num_unique_values\": 7,\n        \"samples\": [\n          \"QHSE\",\n          \"Engineering\",\n          \"Operations\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"join_date\",\n      \"properties\": {\n        \"dtype\": \"date\",\n        \"min\": \"2024-06-01 00:00:00\",\n        \"max\": \"2026-04-11 00:00:00\",\n        \"num_unique_values\": 59,\n        \"samples\": [\n          \"2025-09-22 00:00:00\",\n          \"2025-11-08 00:00:00\",\n          \"2025-08-20 00:00:00\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"last_activity_date\",\n      \"properties\": {\n        \"dtype\": \"date\",\n        \"min\": \"2026-08-11 00:00:00\",\n        \"max\": \"2026-10-31 00:00:00\",\n        \"num_unique_values\": 36,\n        \"samples\": [\n          \"2026-10-30 00:00:00\",\n          \"2026-10-27 00:00:00\",\n          \"2026-09-19 00:00:00\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"quests_completed_6m\",\n      \"properties\": {\n        \"dtype\": \"number\",\n        \"std\": 4,\n        \"min\": 0,\n        \"max\": 16,\n        \"num_unique_values\": 16,\n        \"samples\": [\n          8,\n          14,\n          9\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"missions_joined_6m\",\n      \"properties\": {\n        \"dtype\": \"number\",\n        \"std\": 3,\n        \"min\": 0,\n        \"max\": 13,\n        \"num_unique_values\": 14,\n        \"samples\": [\n          1,\n          9,\n          8\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"tribes_joined\",\n      \"properties\": {\n        \"dtype\": \"number\",\n        \"std\": 0,\n        \"min\": 0,\n        \"max\": 3,\n        \"num_unique_values\": 4,\n        \"samples\": [\n          2,\n          1,\n          0\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"days_since_last_activity\",\n      \"properties\": {\n        \"dtype\": \"number\",\n        \"std\": 19,\n        \"min\": 0,\n        \"max\": 81,\n        \"num_unique_values\": 36,\n        \"samples\": [\n          1,\n          4,\n          42\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"tenure_months\",\n      \"properties\": {\n        \"dtype\": \"number\",\n        \"std\": 6.922880266654961,\n        \"min\": 7.0,\n        \"max\": 29.0,\n        \"num_unique_values\": 22,\n        \"samples\": [\n          13.0,\n          21.0,\n          14.0\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    }\n  ]\n}"
+            }
+          },
+          "metadata": {},
+          "execution_count": 6
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "\n",
+        "**Check and prepare the data**\n",
+        "Before clustering, we check for problems that would distort the groups:\n",
+        "\n",
+        "1. **Missing values**: rows with gaps are set aside and listed, so they can be fixed at source.\n",
+        "2. **Impossible values**: for example, tribes outside 0 to 3, or activity dates after the report date.\n",
+        "\n",
+        "1. **New joiners**: villagers with under six months' tenure have had less time to complete quests, so they are analysed separately.\n",
+        "\n",
+        "\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "FRN-O9axAvts"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "FEATURES = [\"quests_completed_6m\", \"missions_joined_6m\", \"days_since_last_activity\", \"tribes_joined\"]\n",
+        "\n",
+        "missing = df[df[FEATURES].isna().any(axis=1)]\n",
+        "invalid = df[(df[\"tribes_joined\"] < 0) | (df[\"tribes_joined\"] > 3) |\n",
+        "             (df[\"quests_completed_6m\"] < 0) | (df[\"missions_joined_6m\"] < 0) |\n",
+        "             (df[\"days_since_last_activity\"] < 0)]\n",
+        "new_joiners = df[df[\"tenure_months\"] < 6]\n",
+        "\n",
+        "print(f\"Rows with missing values: {len(missing)}\")\n",
+        "print(f\"Rows with impossible values: {len(invalid)}\")\n",
+        "print(f\"New joiners (under 6 months): {len(new_joiners)}\")\n",
+        "\n",
+        "excluded = set(missing.index) | set(invalid.index) | set(new_joiners.index)\n",
+        "model_df = df.drop(index=list(excluded)).copy()\n",
+        "print(f\"Villagers used for clustering: {len(model_df)}\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "4LRY4NAd_v7Y",
+        "outputId": "fd872e25-87c4-4948-e15a-540cddbe2b34"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Rows with missing values: 0\n",
+            "Rows with impossible values: 0\n",
+            "New joiners (under 6 months): 0\n",
+            "Villagers used for clustering: 60\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "**Choose the features**\n",
+        "\n",
+        "We use four features. They are measured on very different scales (days since last activity can reach 80, while tribes only go up to 3), so we scale them to give each an equal say."
+      ],
+      "metadata": {
+        "id": "58UpM-moBbro"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(model_df[FEATURES].describe().T[[\"mean\", \"min\", \"max\"]])\n",
+        "\n",
+        "scaler = StandardScaler()\n",
+        "X = scaler.fit_transform(model_df[FEATURES])\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "FMH7gaauBj7U",
+        "outputId": "7e31e38d-2e28-45d0-8ad3-4b637355d3b2"
+      },
+      "execution_count": 8,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "                          mean  min  max\n",
+            "quests_completed_6m        7.5  0.0 16.0\n",
+            "missions_joined_6m         5.5  0.0 13.0\n",
+            "days_since_last_activity  23.0  0.0 81.0\n",
+            "tribes_joined              1.2  0.0  3.0\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
